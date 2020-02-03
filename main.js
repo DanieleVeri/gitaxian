@@ -240,8 +240,43 @@ MkmApiClient.prototype.setAccessTokens = function(access_token, access_token_sec
 };
 
 /********************************************************************************** Main */
+function _ship(price) {
+	return price >= 50 ? 10 : price >= 25 ? 5 : 2.5
+}
+
+function cost(s, deck_list) {
+	let tot = 0.0
+	let ship = 0
+	let vendors = []
+	for (let i of Object.keys(s)) {
+		let c = s[i]
+		if (!s[i])
+			continue
+		if (!vendors[c[5]])
+			vendors[c[5]] = 0
+
+		vendors[c[5]] += c[2]*deck_list[c[8]]
+	}
+	vendors.forEach((v) => {
+		ship += _ship(v)
+		tot += v
+	})
+	return [tot, ship]
+}
+
+let articles, vendors
+var openFile = function(event) {
+	var input = event.target;
+	var reader = new FileReader();
+	reader.onload = function(){
+	  if (!articles) articles = JSON.parse(reader.result)
+	  else vendors = JSON.parse(reader.result)
+	};
+	reader.readAsText(input.files[0]);
+}
 
 async function main() {
+	/*
 	// MKM API
 	let apikey = document.getElementById('apikey').value
 	let apisec = document.getElementById('apisec').value
@@ -350,7 +385,6 @@ async function main() {
 					}
 				}
 			} catch(e) {
-				console.log(text)
 				console.error(e)
 			}
 			product.push(sum / xml_art.length)
@@ -365,53 +399,112 @@ async function main() {
 	for (let k of Object.keys(articles)) {
 		articles[k].sort((a, b) => a[2] - b[2])
 	}
+	*/
+
+	/*******************************************************************************DELETE <<< */
+	let deck_txt = document.getElementsByTagName('textarea')[0].value
+	let deck_list = {}
+	deck_txt.split('\n').forEach((v, i, s) => {
+		v = v.trim()
+		if (v.length > 0)
+			deck_list[v.substr(v.indexOf(' ')).trim()] = v.split(' ')[0]
+	})
+
+	let avg_products = []
+	for (let k of Object.keys(articles)) {
+		articles[k].forEach((v) => {
+			if (!avg_products[v[7]]) avg_products[v[7]]=[0.0, 0]
+			avg_products[v[7]][0]+=parseFloat(v[2])
+			avg_products[v[7]][1]++
+		})
+	}
+	/***************************************************************************************** >>> */
 
 	// Sort vendors
 	let id_vendors = Object.keys(vendors)
 	let vendors_sorted_num = Array.prototype.slice.call(id_vendors).sort((a, b) => {
 		return vendors[b].length - vendors[a].length
 	})
-	let vendors_sorted_avg = Array.prototype.slice.call(id_vendors).sort((a, b) => {
-		let cum_a = 0
-		for (let card of vendors[a]) {
-			cum_a += card[2] / products[card[8]].find((v) => v[0] === card[7])[4]
-		}
-		let cum_b = 0
-		for (let card of vendors[b]) {
-			cum_b += card[2] / products[card[8]].find((v) => v[0] === card[7])[4]
-		}
-		return cum_a - cum_b
-	})
-
-	// Cost fn
-	function cost(s) {
-		let acc = 0.0
-		let vendors = []
-		for (let i of Object.keys(s)) {
-			let c = s[i]
-			if (!s[i])
-				continue
-			if (!vendors[c[5]])
-				vendors[c[5]] = 0
-
-			vendors[c[5]] += c[2]*deck_list[c[8]]
-		}
-		vendors.forEach((v) => {
-			acc += v + (v >= 50 ? 10 : v >= 25 ? 5 : 2.5)
+	let vendors_sorted_price = Array.prototype.slice.call(id_vendors).sort((a, b) => {
+		let score_a = 0.0
+		vendors[a].forEach((v) => {
+			let avg = avg_products[v[7]][0]/avg_products[v[7]][1]
+			score_a +=  avg / v[2]
 		})
-		return acc
-	}
+		score_a /= vendors[a].length
+		let score_b = 0.0
+		vendors[b].forEach((v) => {
+			let avg = avg_products[v[7]][0]/avg_products[v[7]][1]
+			score_b +=  avg / v[2]
+		})
+		score_b /= vendors[a].length
+		return score_b - score_a
+	})
+	grid()
 	// Init state
 	let state = []
+	let current_vendors = []
 	for (let k of Object.keys(deck_list)) {
 		state[k] = articles[k][0]
+		if (!current_vendors[state[k][5]])
+			current_vendors[state[k][5]] = [0, 0]
+		current_vendors[state[k][5]][0] += parseFloat(state[k][2])
+		current_vendors[state[k][5]][1] ++
 	}
-	console.log(JSON.stringify(articles))
-	console.log(JSON.stringify(vendors))
+	for (let k of Object.keys(state)) {
+		let v = parseFloat(state[k][2])/current_vendors[state[k][5]][0]*_ship(current_vendors[state[k][5]][0])
+		state[k].push(v)
+	}
+	let c0 = cost(state, deck_list)
+	console.log(state, c0)
 
-	/*
-	for (let i = 0; i<10; i++)
-		console.log(cost(vendors[vendors_sorted_num[i]]))
-	*/
-	//console.log(state, cost(state))
+	plot(0, cost(state, deck_list))
+	for (let i = 0; i<vendors_sorted_num.length; i++) {
+		let vid = vendors_sorted_num[i]
+		let copy = Object.assign({}, state)
+		vendors[vid].forEach((v) => copy[v[8]] = v)
+		let c1 = cost(copy, deck_list)
+		if (c0[0]+c0[1] > c1[0]+c1[1]) {
+			state=copy
+			c0 = c1
+		}
+		plot((i+0.0)/vendors_sorted_num.length, c0)
+		console.log(i)
+	}
+	console.log(state, cost(state, deck_list))
+}
+
+function grid() {
+	let c = document.getElementById('007').getContext('2d')
+	c.font = '8px serif';
+	// grid
+	for (let i = 0; i < 800; i+= 10) {
+		c.beginPath();
+		c.strokeStyle = "#CCCCCC";
+		c.moveTo(i, 0);
+    	c.lineTo(i, 600);
+		c.stroke()
+	}
+
+	for (let i = 0; i < 600; i+= 50) {
+		c.beginPath();
+		c.strokeStyle = "#CCCCCC";
+		c.moveTo(0, i);
+    	c.lineTo(800, i);
+		c.stroke()
+		c.fillText(600-i, 0, i);
+	}
+}
+
+function plot(iter, cost) {
+	let c = document.getElementById('007').getContext('2d')
+	c.beginPath();
+	c.strokeStyle = "#0000AA";
+	c.arc(iter*800, 600-cost[0]-cost[1], 1, 0, 2 * Math.PI);
+	c.stroke()
+	c.closePath();
+	c.beginPath();
+	c.arc(iter*800, 600-cost[1], 1, 0, 2 * Math.PI);
+	c.stroke()
+	c.closePath();
 }

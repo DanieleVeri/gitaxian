@@ -35,9 +35,11 @@
         <label>Language
             <input id="lang"/>
         </label><i> (leave empty if you don't give un cazzo)</i><br/>
+        <input type='file' accept='text/plain' onchange='openFile(event)'>
         <button onclick="main().catch(console.error)"
             style="margin-top: 20px; width: 100%; height: 50px;">
             START
         </button>
+        <canvas id="007" width="800" height="600" style="border: 1px solid black"></canvas>
     </body>
 </html>

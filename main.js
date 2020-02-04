@@ -51,11 +51,11 @@ utils.__mkmrequest = async function(keys, method, path, data, headers, tokens){
 			headers
 		})
 	}
-	else if (method === "POST") {
+	else if (method === "POST" || method === "PUT") {
 		return await fetch(`https://${host}${path}`, {
 			method: method,
 			headers,
-			body: data ? JSON.stringify(data) : undefined
+			body: data ? typeof data === 'string' ? data : JSON.stringify(data) : undefined
 		})
 	}
 
@@ -163,8 +163,10 @@ utils.getSigningKey = getSigningKey;
 
 function makeParams(params, data){
 	const needed_params = ['consumer_key','token','nonce','timestamp','signature_method','version'];
-	for(var k in data){
-		params[k] = data[k];
+	if (typeof data !== 'string') {
+		for(var k in data){
+			params[k] = data[k];
+		}
 	}
     params = sortObject(params);
 	for(var k of needed_params){
@@ -276,7 +278,6 @@ var openFile = function(event) {
 }
 
 async function main() {
-	/*
 	// MKM API
 	let apikey = document.getElementById('apikey').value
 	let apisec = document.getElementById('apisec').value
@@ -287,6 +288,8 @@ async function main() {
 		alert("Rikkio!")
 		return
 	}
+	utils.debug = true
+
 	const client = new MkmApiClient(apikey, apisec);
 	client.setAccessTokens(accesskey, accesssec)
 
@@ -392,24 +395,14 @@ async function main() {
 		progress += 100.0 / Object.keys(deck_list).length
 		document.getElementsByTagName('button')[0].innerText = `... ${progress.toFixed(2)}% ...`
 	}
-	document.getElementsByTagName('button')[0].disabled = false
-	document.getElementsByTagName('button')[0].innerText = `START`
+	document.getElementsByTagName('button')[0].innerText = `Sorting...`
 
 	// Sort articles
 	for (let k of Object.keys(articles)) {
 		articles[k].sort((a, b) => a[2] - b[2])
 	}
-	*/
 
-	/*******************************************************************************DELETE <<< */
-	let deck_txt = document.getElementsByTagName('textarea')[0].value
-	let deck_list = {}
-	deck_txt.split('\n').forEach((v, i, s) => {
-		v = v.trim()
-		if (v.length > 0)
-			deck_list[v.substr(v.indexOf(' ')).trim()] = v.split(' ')[0]
-	})
-
+	// Avg product price
 	let avg_products = []
 	for (let k of Object.keys(articles)) {
 		articles[k].forEach((v) => {
@@ -418,48 +411,46 @@ async function main() {
 			avg_products[v[7]][1]++
 		})
 	}
-	/***************************************************************************************** >>> */
 
 	// Sort vendors
 	let id_vendors = Object.keys(vendors)
 	let vendors_sorted_num = Array.prototype.slice.call(id_vendors).sort((a, b) => {
 		return vendors[b].length - vendors[a].length
 	})
-	let vendors_sorted_price = Array.prototype.slice.call(id_vendors).sort((a, b) => {
-		let score_a = 0.0
-		vendors[a].forEach((v) => {
-			let avg = avg_products[v[7]][0]/avg_products[v[7]][1]
-			score_a +=  avg / v[2]
-		})
-		score_a /= vendors[a].length
-		let score_b = 0.0
-		vendors[b].forEach((v) => {
-			let avg = avg_products[v[7]][0]/avg_products[v[7]][1]
-			score_b +=  avg / v[2]
-		})
-		score_b /= vendors[a].length
-		return score_b - score_a
-	})
+
+	document.getElementsByTagName('button')[0].innerText = `mmmhhhhhh...`
 	grid()
 	// Init state
 	let state = []
 	let current_vendors = []
 	for (let k of Object.keys(deck_list)) {
 		state[k] = articles[k][0]
+		if (!state[k])
+			continue
 		if (!current_vendors[state[k][5]])
 			current_vendors[state[k][5]] = [0, 0]
 		current_vendors[state[k][5]][0] += parseFloat(state[k][2])
 		current_vendors[state[k][5]][1] ++
 	}
 	for (let k of Object.keys(state)) {
+		if (!state[k])
+			continue
 		let v = parseFloat(state[k][2])/current_vendors[state[k][5]][0]*_ship(current_vendors[state[k][5]][0])
 		state[k].push(v)
 	}
 	let c0 = cost(state, deck_list)
 	console.log(state, c0)
-
 	plot(0, cost(state, deck_list))
-	for (let i = 0; i<vendors_sorted_num.length; i++) {
+
+	let i = 0
+	function _() {
+		if (i>=vendors_sorted_num.length/4) {
+			console.log(state, cost(state, deck_list))
+			document.getElementsByTagName('button')[0].disabled = false
+			document.getElementsByTagName('button')[0].innerText = `START`
+			put_cart(client, state, deck_list)
+			return
+		}
 		let vid = vendors_sorted_num[i]
 		let copy = Object.assign({}, state)
 		vendors[vid].forEach((v) => copy[v[8]] = v)
@@ -470,8 +461,22 @@ async function main() {
 		}
 		plot((i+0.0)/vendors_sorted_num.length, c0)
 		console.log(i)
+		i++
+		setTimeout(_, 0)
 	}
-	console.log(state, cost(state, deck_list))
+	setTimeout(_, 0)
+}
+
+async function put_cart(client, state, deck_list) {
+	console.log(deck_list)
+	let body = '<?xml version="1.0" encoding="UTF-8" ?><request><action>add</action>'
+	Object.keys(state).forEach((k) => body += `<article>
+			<idArticle>${state[k][0]}</idArticle>
+			<amount>${deck_list[k]}</amount>
+		</article>`)
+	body += '</request>'
+	let res = await client.request('PUT', `/ws/v2.0/shoppingcart`, body)
+	alert('done! open the shopping cart')
 }
 
 function grid() {
@@ -482,17 +487,17 @@ function grid() {
 		c.beginPath();
 		c.strokeStyle = "#CCCCCC";
 		c.moveTo(i, 0);
-    	c.lineTo(i, 600);
+    	c.lineTo(i, 200);
 		c.stroke()
 	}
 
-	for (let i = 0; i < 600; i+= 50) {
+	for (let i = 0; i < 200; i+= 50) {
 		c.beginPath();
 		c.strokeStyle = "#CCCCCC";
 		c.moveTo(0, i);
     	c.lineTo(800, i);
 		c.stroke()
-		c.fillText(600-i, 0, i);
+		c.fillText(200-i, 0, i);
 	}
 }
 
@@ -500,11 +505,11 @@ function plot(iter, cost) {
 	let c = document.getElementById('007').getContext('2d')
 	c.beginPath();
 	c.strokeStyle = "#0000AA";
-	c.arc(iter*800, 600-cost[0]-cost[1], 1, 0, 2 * Math.PI);
+	c.arc(iter*800, 200-cost[0]-cost[1], 1, 0, 2 * Math.PI);
 	c.stroke()
 	c.closePath();
 	c.beginPath();
-	c.arc(iter*800, 600-cost[1], 1, 0, 2 * Math.PI);
+	c.arc(iter*800, 200-cost[1], 1, 0, 2 * Math.PI);
 	c.stroke()
 	c.closePath();
 }

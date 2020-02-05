@@ -1,6 +1,5 @@
 /*************************************************************** MKM API */
-var utils = {};
-utils.debug = false;
+var utils = {debug: true};
 
 utils.get = async function(keys, path, data, headers, tokens){
 	return await utils.__mkmrequest(keys, 'GET', path, data, headers);
@@ -266,17 +265,6 @@ function cost(s, deck_list) {
 	return [tot, ship]
 }
 
-let articles, vendors
-var openFile = function(event) {
-	var input = event.target;
-	var reader = new FileReader();
-	reader.onload = function(){
-	  if (!articles) articles = JSON.parse(reader.result)
-	  else vendors = JSON.parse(reader.result)
-	};
-	reader.readAsText(input.files[0]);
-}
-
 async function main() {
 	// MKM API
 	let apikey = document.getElementById('apikey').value
@@ -284,8 +272,7 @@ async function main() {
 	let accesskey = document.getElementById('accesskey').value
 	let accesssec = document.getElementById('accesssec').value
 	if (apikey.length * apisec.length * accesskey.length * accesssec.length === 0) {
-		alert("Compila i campi in alto a destra con quelli che trovi qui: \nhttps://www.cardmarket.com/en/Magic/Account/API \n")
-		alert("Rikkio!")
+		alert("Missing on or more API keys: \nhttps://www.cardmarket.com/en/Magic/Account/API \n")
 		return
 	}
 	utils.debug = true
@@ -307,7 +294,7 @@ async function main() {
 
 	// Start
 	document.getElementsByTagName('button')[0].disabled = true
-	document.getElementsByTagName('button')[0].innerText = "... 0% ..."
+	document.getElementsByTagName('button')[0].innerText = "requests: 0% ..."
 	let vendors = {}
 	let articles = {}
 	let products = {}
@@ -393,9 +380,9 @@ async function main() {
 			product.push(sum / xml_art.length)
 		}
 		progress += 100.0 / Object.keys(deck_list).length
-		document.getElementsByTagName('button')[0].innerText = `... ${progress.toFixed(2)}% ...`
+		document.getElementsByTagName('button')[0].innerText = `requests ${progress.toFixed(2)}% ...`
 	}
-	document.getElementsByTagName('button')[0].innerText = `Sorting...`
+	document.getElementsByTagName('button')[0].innerText = `sorting ...`
 
 	// Sort articles
 	for (let k of Object.keys(articles)) {
@@ -418,8 +405,7 @@ async function main() {
 		return vendors[b].length - vendors[a].length
 	})
 
-	document.getElementsByTagName('button')[0].innerText = `mmmhhhhhh...`
-	grid()
+	document.getElementsByTagName('button')[0].innerText = `searching ...`
 	// Init state
 	let state = []
 	let current_vendors = []
@@ -440,7 +426,6 @@ async function main() {
 	}
 	let c0 = cost(state, deck_list)
 	console.log(state, c0)
-	plot(0, cost(state, deck_list))
 
 	let i = 0
 	function _() {
@@ -459,7 +444,6 @@ async function main() {
 			state=copy
 			c0 = c1
 		}
-		plot((i+0.0)/vendors_sorted_num.length, c0)
 		console.log(i)
 		i++
 		setTimeout(_, 0)
@@ -469,47 +453,21 @@ async function main() {
 
 async function put_cart(client, state, deck_list) {
 	console.log(deck_list)
+	let skipped = ''
 	let body = '<?xml version="1.0" encoding="UTF-8" ?><request><action>add</action>'
-	Object.keys(state).forEach((k) => body += `<article>
-			<idArticle>${state[k][0]}</idArticle>
-			<amount>${deck_list[k]}</amount>
-		</article>`)
+	Object.keys(state).forEach((k) => {
+		if (state[k])
+			body += `<article><idArticle>${state[k][0]}</idArticle><amount>${deck_list[k]}</amount></article>`
+		else
+			skipped += `${deck_list[k]} ${k}\n`
+	})
 	body += '</request>'
 	let res = await client.request('PUT', `/ws/v2.0/shoppingcart`, body)
-	alert('done! open the shopping cart')
-}
-
-function grid() {
-	let c = document.getElementById('007').getContext('2d')
-	c.font = '8px serif';
-	// grid
-	for (let i = 0; i < 800; i+= 10) {
-		c.beginPath();
-		c.strokeStyle = "#CCCCCC";
-		c.moveTo(i, 0);
-    	c.lineTo(i, 200);
-		c.stroke()
-	}
-
-	for (let i = 0; i < 200; i+= 50) {
-		c.beginPath();
-		c.strokeStyle = "#CCCCCC";
-		c.moveTo(0, i);
-    	c.lineTo(800, i);
-		c.stroke()
-		c.fillText(200-i, 0, i);
-	}
-}
-
-function plot(iter, cost) {
-	let c = document.getElementById('007').getContext('2d')
-	c.beginPath();
-	c.strokeStyle = "#0000AA";
-	c.arc(iter*800, 200-cost[0]-cost[1], 1, 0, 2 * Math.PI);
-	c.stroke()
-	c.closePath();
-	c.beginPath();
-	c.arc(iter*800, 200-cost[1], 1, 0, 2 * Math.PI);
-	c.stroke()
-	c.closePath();
+	if (res.status === 200) {
+		if (skipped.length === 0)
+			alert('All items have been successfully added to your cart')
+		else
+			alert('Cart updated, the following items were not found:\n' + skipped)
+	} else
+		alert('Cart update error')
 }

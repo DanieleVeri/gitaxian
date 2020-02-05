@@ -7,7 +7,7 @@
     </head>
     <body>
         <div style="float: left; font-size: 40px;">
-            MKM basket for povery
+            GitAxian 0.2
         </div>
         <div style="text-align: right;">
             <label>API token <input id="apikey"/></label><br/>
@@ -22,24 +22,22 @@
             <option value="NM">Near Mint</option>
             <option value="EX">Excellent</option>
             <option value="GD">Good</option>
-            <option value="LP">Light Played (landa perde)</option>
-            <option value="PO">Poor Played (va bene la proxy)</option>
+            <option value="LP">Light Played</option>
+            <option value="PO">Poor Played</option>
         </select></label><br/>
         <label>Min seller rate <select id="minselrate">
             <option value="5">5</option>
             <option value="4">4</option>
-            <option value="3">3 (mmmhhh)</option>
-            <option value="2">2 (cussu ti freca)</option>
-            <option value="1">ganga</option>
+            <option value="3">3</option>
+            <option value="2">2</option>
+            <option value="1">1</option>
         </select></label><br/>
         <label>Language
             <input id="lang"/>
-        </label><i> (leave empty if you don't give un cazzo)</i><br/>
-        <input type='file' accept='text/plain' onchange='openFile(event)'>
+        </label><i> (leave empty if you don't care)</i><br/>
         <button onclick="main().catch(console.error)"
             style="margin-top: 20px; width: 100%; height: 50px;">
             START
         </button>
-        <canvas id="007" width="800" height="200" style="border: 1px solid black"></canvas>
     </body>
 </html>

@@ -3,26 +3,6 @@ function ship(price) {
 	return price >= 50 ? 10 : price >= 25 ? 5 : 2.5
 }
 
-function cost(article_list, deck_list) {
-	let articles_val = 0.0
-	let ship_val = 0
-	let vendors = []
-	for (let i of Object.keys(article_list)) {
-		let c = article_list[i]
-		if (!article_list[i])
-			continue
-		if (!vendors[c[5]])
-			vendors[c[5]] = 0
-
-		vendors[c[5]] += c[2]*deck_list[c[8]]
-	}
-	vendors.forEach((v) => {
-		ship_val += ship(v)
-		articles_val += v
-	})
-	return [articles_val, ship_val]
-}
-
 async function main() {
 	// MKM API
 	let apikey = document.getElementById('apikey').value
@@ -84,7 +64,6 @@ async function main() {
 			res = await client.request('GET', `/ws/v2.0/articles/${product[0]}`, {idProduct: product[0],
 				minCondition: minq,
 				minUserScore: minsr,
-				minAvailable: deck_list[k],
 				start: '0',
 				maxResults: '1000'})
 			text = await res.text();
@@ -148,31 +127,93 @@ async function main() {
 		return vendors[b].length - vendors[a].length
 	})
 
+	// Cart cost fn
+	function cost(article_list) {
+		let articles_val = 0.0
+		let ship_val = 0
+		let vendors = []
+		for (let i of Object.keys(article_list)) {
+			let c = article_list[i]
+			if (!article_list[i])
+				continue
+			if (!vendors[c[5]])
+				vendors[c[5]] = 0
+			vendors[c[5]] += parseFloat(c[2])
+		}
+		vendors.forEach((v) => {
+			ship_val += ship(v)
+			articles_val += v
+		})
+		return [articles_val, ship_val]
+	}
+
 	// Start search
 	document.getElementsByTagName('button')[0].innerText = `searching ...`
 	let state = []
 	// Naive lowest cost start
 	for (let k of Object.keys(deck_list)) {
-		state[k] = articles[k][0]
-		if (!state[k])
+		let num = parseInt(deck_list[k])
+		let articles_counter = 0
+		let article = articles[k][articles_counter]
+		if (!article) {
+			state[k] = undefined
 			continue
+		}
+		let available = parseInt(article[3])
+
+		if (available >= num) {
+			for (let i=0; i<num; i++) {
+				state[i+'_'+k] = article
+			}
+		} else {
+			for (let i=0; i<available; i++) {
+				state[i+'_'+k] = article
+			}
+			let picked = available
+			while (picked < num) {
+				articles_counter ++
+				article = articles[k][articles_counter]
+				if (!article) {
+					for (let i=picked; i<num; i++) state[i+'_'+k] = undefined
+					break
+				}
+				available = parseInt(article[3])
+				if (available > num - picked) {
+					for (let i=picked; i<num; i++) {
+						state[i+'_'+k] = article
+					}
+					picked = num
+				} else {
+					for (let i=picked; i<picked+available; i++) {
+						state[i+'_'+k] = article
+					}
+					picked += available
+				}
+			}
+		}
 	}
-	let c0 = cost(state, deck_list)
+	let c0 = cost(state)
 
 	// Search loop
 	let i = 0
 	async function next_state() {
-		// Exit once passed 25% vendors
+		// Exit after 25% vendors
 		if (i>=vendors_sorted_num.length/4) {
 			// Update cart
 			let skipped = ''
 			let body = '<?xml version="1.0" encoding="UTF-8" ?><request><action>add</action>'
-			Object.keys(state).forEach((k) => {
-				if (state[k])
-					body += `<article><idArticle>${state[k][0]}</idArticle><amount>${deck_list[k]}</amount></article>`
-				else
-					skipped += `${deck_list[k]} ${k}\n`
-			})
+			let cart = {}
+			for (let k of Object.keys(state)) {
+				if(!state[k]) {
+					skipped += `${k}\n`
+					continue
+				}
+				if (!cart[state[k][0]])
+					cart[state[k][0]] = 0
+				cart[state[k][0]] ++
+			}
+			Object.keys(cart).forEach((k) =>
+					body += `<article><idArticle>${k}</idArticle><amount>${cart[k]}</amount></article>`)
 			body += '</request>'
 			let res = await client.request('PUT', `/ws/v2.0/shoppingcart`, body)
 			if (res.status === 200) {
@@ -190,8 +231,15 @@ async function main() {
 		// Try next vendor in sorted array
 		let vid = vendors_sorted_num[i]
 		let copy = Object.assign({}, state)
-		vendors[vid].forEach((v) => copy[v[8]] = v)
-		let c1 = cost(copy, deck_list)
+		vendors[vid].forEach((article) => {
+			let num = parseInt(article[3])
+			let max = parseInt(deck_list[article[8]])
+			let min = max > num ? num : max
+			for (let i=0; i<min; i++) {
+				copy[i+'_'+article[8]] = article
+			}
+		})
+		let c1 = cost(copy)
 		if (c0[0]+c0[1] > c1[0]+c1[1]) {
 			state=copy
 			c0 = c1

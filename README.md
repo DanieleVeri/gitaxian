@@ -8,6 +8,6 @@
 ___
 ### TODO
 - Widget app for article retrieving, Dedicated app for cart manipulation
-- Fix minAvailable issue
+- Use web workers
 - Token input type password
 - Replace alert with div

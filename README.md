@@ -8,6 +8,7 @@
 ___
 ### TODO
 - Widget app for article retrieving, Dedicated app for cart manipulation
-- Use web workers
+- Implement as [Uncapacitated facility location](https://en.wikipedia.org/wiki/Facility_location_problem#Uncapacitated_facility_location)
+- Web workers or server-side impl
 - Token input type password
 - Replace alert with div
